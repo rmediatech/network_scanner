@@ -54,6 +54,42 @@ pub fn scan_cidr(
     if hosts.is_empty() {
         return Ok(Vec::new());
     }
+
+    // High-speed passive lookup: read the kernel ARP table once in microsecond time
+    if !perform_probe {
+        let mut arp_map = std::collections::HashMap::new();
+        if let Ok(entries) = arp::read_proc_net_arp() {
+            for (ip, mac_str, _) in entries {
+                if let Some(mac) = arp::parse_mac(&mac_str) {
+                    if mac != [0, 0, 0, 0, 0, 0] {
+                        arp_map.insert(ip, mac);
+                    }
+                }
+            }
+        }
+        if arp_map.is_empty() {
+            if let Ok(output) = std::process::Command::new("ip").args(["neigh"]).output() {
+                if output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    for (ip, mac_str, _) in arp::parse_ip_neigh(&stdout) {
+                        if let Some(mac) = arp::parse_mac(&mac_str) {
+                            if mac != [0, 0, 0, 0, 0, 0] {
+                                arp_map.insert(ip, mac);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut results = Vec::with_capacity(hosts.len());
+        for ip in hosts {
+            let mac = arp_map.get(&ip).cloned();
+            results.push((ip, mac));
+        }
+        return Ok(results);
+    }
+
     let workers = std::cmp::max(1, workers);
     let (res_tx, res_rx) = mpsc::channel();
 

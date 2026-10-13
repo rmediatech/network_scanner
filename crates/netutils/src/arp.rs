@@ -28,8 +28,16 @@ pub fn parse_proc_net_arp(content: &str) -> Vec<(Ipv4Addr, String, String)> {
     for line in content.lines().skip(1) {
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() >= 6 {
+            let flags = parts[2];
+            // Skip incomplete / stale ARP entries (0x0)
+            if flags == "0x0" || flags == "0" {
+                continue;
+            }
             if let Ok(ip) = parts[0].parse::<Ipv4Addr>() {
-                if parse_mac(parts[3]).is_some() {
+                if let Some(m) = parse_mac(parts[3]) {
+                    if m == [0, 0, 0, 0, 0, 0] {
+                        continue;
+                    }
                     let mac = parts[3].to_string();
                     let dev = parts[5].to_string();
                     out.push((ip, mac, dev));
@@ -50,6 +58,9 @@ pub fn read_proc_net_arp() -> Result<Vec<(Ipv4Addr, String, String)>, ArpError> 
 pub fn parse_ip_neigh(output: &str) -> Vec<(Ipv4Addr, String, String)> {
     let mut out = Vec::new();
     for line in output.lines() {
+        if line.contains("FAILED") || line.contains("INCOMPLETE") {
+            continue;
+        }
         // typical: "192.168.1.1 dev eth0 lladdr 00:11:22:33:44:55 REACHABLE"
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() >= 5 {
@@ -64,8 +75,12 @@ pub fn parse_ip_neigh(output: &str) -> Vec<(Ipv4Addr, String, String)> {
                         dev = parts[i + 1].to_string();
                     }
                 }
-                if !mac.is_empty() && parse_mac(&mac).is_some() {
-                    out.push((ip, mac, dev));
+                if !mac.is_empty() && mac != "00:00:00:00:00:00" {
+                    if let Some(m) = parse_mac(&mac) {
+                        if m != [0, 0, 0, 0, 0, 0] {
+                            out.push((ip, mac, dev));
+                        }
+                    }
                 }
             }
         }
@@ -73,15 +88,14 @@ pub fn parse_ip_neigh(output: &str) -> Vec<(Ipv4Addr, String, String)> {
     out
 }
 
-/// Try to lookup MAC for an IPv4 address using `ip neigh` then `/proc/net/arp`, then `arp -n`.
+/// Try to lookup MAC for an IPv4 address using `/proc/net/arp`, then `ip neigh`, then `arp -n`.
 pub fn lookup_mac(ip: Ipv4Addr) -> Option<[u8; 6]> {
-    // Try ip neigh
-    if let Ok(output) = Command::new("ip").args(["neigh"]).output() {
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            for (addr, mac, _dev) in parse_ip_neigh(&stdout) {
-                if addr == ip {
-                    if let Some(m) = parse_mac(&mac) {
+    // 1. Try /proc/net/arp first (fastest on Linux, zero subprocess forks)
+    if let Ok(entries) = read_proc_net_arp() {
+        for (addr, mac, _dev) in entries {
+            if addr == ip {
+                if let Some(m) = parse_mac(&mac) {
+                    if m != [0, 0, 0, 0, 0, 0] {
                         return Some(m);
                     }
                 }
@@ -89,18 +103,23 @@ pub fn lookup_mac(ip: Ipv4Addr) -> Option<[u8; 6]> {
         }
     }
 
-    // Try /proc/net/arp
-    if let Ok(entries) = read_proc_net_arp() {
-        for (addr, mac, _dev) in entries {
-            if addr == ip {
-                if let Some(m) = parse_mac(&mac) {
-                    return Some(m);
+    // 2. Fallback to `ip neigh`
+    if let Ok(output) = Command::new("ip").args(["neigh"]).output() {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for (addr, mac, _dev) in parse_ip_neigh(&stdout) {
+                if addr == ip {
+                    if let Some(m) = parse_mac(&mac) {
+                        if m != [0, 0, 0, 0, 0, 0] {
+                            return Some(m);
+                        }
+                    }
                 }
             }
         }
     }
 
-    // Fallback to `arp -n` if present
+    // 3. Fallback to `arp -n` if present
     if let Ok(output) = Command::new("arp").arg("-n").output() {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -108,8 +127,12 @@ pub fn lookup_mac(ip: Ipv4Addr) -> Option<[u8; 6]> {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 3 {
                     if parts[0] == ip.to_string() {
-                        if let Some(m) = parse_mac(parts[2]) {
-                            return Some(m);
+                        if parts[2] != "00:00:00:00:00:00" && parts[2] != "<incomplete>" {
+                            if let Some(m) = parse_mac(parts[2]) {
+                                if m != [0, 0, 0, 0, 0, 0] {
+                                    return Some(m);
+                                }
+                            }
                         }
                     }
                 }
