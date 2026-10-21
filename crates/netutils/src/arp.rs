@@ -269,8 +269,28 @@ mod tests {
         assert!(m.is_none() || m.is_some());
     }
 }
-// Minimal stub for arp module to allow incremental porting.
-
-pub fn placeholder() {
-    // to be implemented: ARP active probing, cache parsing, helpers
+/// Resolve the current IPv4 lease for an immutable hardware MAC signature (`SOVEREIGN-IDENTITY-ANCHOR-01`).
+pub fn resolve_ip_by_mac(target_mac: [u8; 6]) -> Option<Ipv4Addr> {
+    if target_mac == [0, 0, 0, 0, 0, 0] {
+        return None;
+    }
+    if let Ok(entries) = read_proc_net_arp() {
+        for (addr, mac_str, _dev) in entries {
+            if parse_mac(&mac_str) == Some(target_mac) {
+                return Some(addr);
+            }
+        }
+    }
+    if let Ok(output) = Command::new("ip").args(["neigh"]).output() {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for (addr, mac_str, _dev) in parse_ip_neigh(&stdout) {
+                if parse_mac(&mac_str) == Some(target_mac) {
+                    return Some(addr);
+                }
+            }
+        }
+    }
+    None
 }
+

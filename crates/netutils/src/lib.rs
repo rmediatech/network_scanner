@@ -1,6 +1,7 @@
 pub mod arp;
 pub mod cidrsniffer;
 pub mod iface;
+pub mod iface_lookup;
 pub mod netcheck;
 pub mod portscan;
 pub mod rawsocket;

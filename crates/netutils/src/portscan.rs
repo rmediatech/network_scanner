@@ -79,18 +79,42 @@ pub fn scan_tcp(
     rt.block_on(scan_tcp_async(ips, port, timeout, concurrency))
 }
 
-/// Normalize a banner string: strip ANSI escapes, trim, keep printable ascii, collapse whitespace, limit length.
+/// Normalize a banner string: strip CSI/OSC ANSI escapes, trim, keep printable ascii, collapse whitespace, limit length.
 pub fn normalize_banner(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
-    let mut in_escape = false;
-    for c in s.chars() {
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
         if c == '\x1b' {
-            in_escape = true;
-            continue;
-        }
-        if in_escape {
-            if c.is_ascii_alphabetic() {
-                in_escape = false;
+            match chars.peek().copied() {
+                Some('[') => {
+                    chars.next();
+                    while let Some(&nc) = chars.peek() {
+                        chars.next();
+                        if ('\x40'..='\x7e').contains(&nc) {
+                            break;
+                        }
+                    }
+                }
+                Some(']') => {
+                    chars.next();
+                    while let Some(nc) = chars.next() {
+                        if nc == '\x07' {
+                            break;
+                        }
+                        if nc == '\x1b' && chars.peek() == Some(&'\\') {
+                            chars.next();
+                            break;
+                        }
+                    }
+                }
+                _ => {
+                    while let Some(&nc) = chars.peek() {
+                        chars.next();
+                        if nc.is_ascii_alphabetic() {
+                            break;
+                        }
+                    }
+                }
             }
             continue;
         }
