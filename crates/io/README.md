@@ -1,6 +1,6 @@
 # io 🗄️
 
-[![CI](https://github.com/xuoxod/network_scanner/actions/workflows/discovery.yml/badge.svg)](https://github.com/xuoxod/network_scanner/actions) [![docs.rs](https://docs.rs/io/badge.svg)](https://docs.rs/io) [![crates.io](https://img.shields.io/crates/v/io.svg)](https://crates.io/crates/io)
+[![CI](https://github.com/rmediatech/network_scanner/actions/workflows/discovery.yml/badge.svg)](https://github.com/rmediatech/network_scanner/actions) [![docs.rs](https://docs.rs/io/badge.svg)](https://docs.rs/io) [![crates.io](https://img.shields.io/crates/v/io.svg)](https://crates.io/crates/io)
 
 I/O adapters, canonical serializers, and OUI hardware vendor resolution.
 

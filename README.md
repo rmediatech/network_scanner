@@ -1,7 +1,7 @@
 # Network Scanner 🔎🦀
 
-[![release](https://img.shields.io/github/v/release/xuoxod/network_scanner)](https://github.com/xuoxod/network_scanner/releases)
-[![CI](https://github.com/xuoxod/network_scanner/actions/workflows/discovery.yml/badge.svg)](https://github.com/xuoxod/network_scanner/actions)
+[![release](https://img.shields.io/github/v/release/xuoxod/network_scanner)](https://github.com/rmediatech/network_scanner/releases)
+[![CI](https://github.com/rmediatech/network_scanner/actions/workflows/discovery.yml/badge.svg)](https://github.com/rmediatech/network_scanner/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange.svg)](https://www.rust-lang.org)
 [![Static Musl](https://img.shields.io/badge/Binary-Static%20Musl-success.svg)](BUILDING.md)
